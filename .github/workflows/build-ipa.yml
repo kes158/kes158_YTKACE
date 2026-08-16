@@ -240,11 +240,22 @@ jobs:
 
           # OpenYouTubeInSafari: tweaks/OpenYouTubeSafariExtension.appex
           # .appex는 extra-debs가 아닌 별도 경로에 보관 (주입 방식이 다름)
+          # GitHub 웹 UI로 .appex(폴더/번들)를 업로드하면 브라우저가 폴더를
+          # 그대로 올리지 못해 자동으로 .appex.zip으로 압축해버리므로,
+          # .appex가 없고 .appex.zip만 있으면 여기서 압축을 풀어줍니다.
           if [[ "${{ inputs.include_openyoutubeinsafari }}" == "true" ]]; then
             if [[ -e "tweaks/OpenYouTubeSafariExtension.appex" ]]; then
               echo "[OK] tweaks/OpenYouTubeSafariExtension.appex 확인됨"
+            elif [[ -f "tweaks/OpenYouTubeSafariExtension.appex.zip" ]]; then
+              unzip -q "tweaks/OpenYouTubeSafariExtension.appex.zip" -d tweaks
+              if [[ -e "tweaks/OpenYouTubeSafariExtension.appex" ]]; then
+                echo "[OK] tweaks/OpenYouTubeSafariExtension.appex.zip → 압축 해제 완료"
+              else
+                echo "[WARN] tweaks/OpenYouTubeSafariExtension.appex.zip 압축을 풀었지만"
+                echo "       OpenYouTubeSafariExtension.appex를 찾지 못했습니다. 건너뜁니다."
+              fi
             else
-              echo "[WARN] tweaks/OpenYouTubeSafariExtension.appex 파일이 없습니다. OpenYouTubeInSafari를 건너뜁니다."
+              echo "[WARN] tweaks/OpenYouTubeSafariExtension.appex(.zip) 파일이 없습니다. OpenYouTubeInSafari를 건너뜁니다."
             fi
           fi
 
