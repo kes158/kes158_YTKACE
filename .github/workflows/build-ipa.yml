@@ -106,6 +106,10 @@ jobs:
   package:
     needs: build
     runs-on: macos-latest
+    outputs:
+      ipa: ${{ steps.inject.outputs.ipa }}
+      tweak_version: ${{ steps.inject.outputs.tweak_version }}
+      youtube_version: ${{ steps.inject.outputs.youtube_version }}
     steps:
       - uses: actions/checkout@v4
 
@@ -254,12 +258,16 @@ jobs:
           set -euo pipefail
 
           # ── YTKACE deb 풀기 ──
+          deb_file="$(ls packages/*.deb | head -1)"
           mkdir deb-root
-          dpkg-deb -x packages/*.deb deb-root
+          dpkg-deb -x "$deb_file" deb-root
           export LDID="$(brew --prefix)/bin/ldid"
 
           # ── 버전 정보 추출 ──
-          tweak_version="$(awk '/^Version:/ {print $2}' control)"
+          # dpkg-deb -x는 data만 추출하고 control 파일은 만들지 않으므로,
+          # 기존의 "control" 파일을 직접 읽는 방식은 동작하지 않습니다.
+          # dpkg-deb -f로 .deb 메타데이터에서 Version 필드를 바로 읽어옵니다.
+          tweak_version="$(dpkg-deb -f "$deb_file" Version)"
           youtube_version="$(python3 - <<'PY'
           import plistlib, zipfile
           with zipfile.ZipFile('YouTube.ipa') as z:
@@ -268,7 +276,7 @@ jobs:
               print(plistlib.loads(z.read(info))['CFBundleShortVersionString'])
           PY
           )"
-          output="YTKACE_${tweak_version}_YouTube_${youtube_version}.ipa"
+          output="YTKACE_${tweak_version}_${youtube_version}.ipa"
 
           # ── 1차: YTKACE sideload-repack ──
           bash Scripts/sideload-repack.sh \
@@ -461,6 +469,8 @@ jobs:
             "$output"
 
           echo "ipa=$output" >> "$GITHUB_OUTPUT"
+          echo "tweak_version=$tweak_version" >> "$GITHUB_OUTPUT"
+          echo "youtube_version=$youtube_version" >> "$GITHUB_OUTPUT"
           echo "=== 빌드 완료: $output ==="
 
       # ── 아티팩트 업로드 ────────────────────────────────────────────────
@@ -469,3 +479,60 @@ jobs:
           name: YTKACE-IPA
           path: ${{ steps.inject.outputs.ipa }}
           if-no-files-found: error
+
+  # ── 3단계: GitHub Release 자동 생성 ────────────────────────────────────
+  release:
+    needs: package
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # 릴리즈 생성/에셋 업로드에는 write 권한이 필요합니다 (상단 기본값은 read)
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: YTKACE-IPA
+          path: dist
+
+      # ── 태그명 / 릴리즈 본문 생성 ────────────────────────────────────
+      - name: Build release tag and notes
+        id: meta
+        env:
+          TWEAK_VERSION:   ${{ needs.package.outputs.tweak_version }}
+          YOUTUBE_VERSION: ${{ needs.package.outputs.youtube_version }}
+        run: |
+          set -euo pipefail
+
+          tag="YTKACE_${TWEAK_VERSION}_${YOUTUBE_VERSION}"
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+
+          {
+            echo "body<<RELEASE_BODY_EOF"
+            echo "Updated to YouTube v${YOUTUBE_VERSION}"
+            echo ""
+            echo "Included Tweaks:"
+            echo ""
+            echo "YTKACE"
+            [[ "${{ inputs.include_ytvideoerroralert }}"     == "true" ]] && echo "YTVideoErrorAlert" || true
+            [[ "${{ inputs.include_donteatmycontent }}"      == "true" ]] && echo "DontEatMyContent" || true
+            [[ "${{ inputs.include_gonerino }}"              == "true" ]] && echo "Gonerino" || true
+            [[ "${{ inputs.include_yougetcaption }}"         == "true" ]] && echo "YouGetCaption" || true
+            [[ "${{ inputs.include_youchoosequality }}"      == "true" ]] && echo "YouChooseQuality" || true
+            [[ "${{ inputs.include_youquality }}"            == "true" ]] && echo "YouQuality" || true
+            [[ "${{ inputs.include_ytabconfig }}"            == "true" ]] && echo "YTABConfig" || true
+            [[ "${{ inputs.include_ytvideooverlay }}"        == "true" ]] && echo "YTVideoOverlay" || true
+            [[ "${{ inputs.include_yougroupsettings }}"      == "true" ]] && echo "YouGroupSettings" || true
+            [[ "${{ inputs.include_youtubedislikesreturn }}" == "true" ]] && echo "Return YouTube Dislikes" || true
+            [[ "${{ inputs.include_youpip }}"                == "true" ]] && echo "YouPiP" || true
+            [[ "${{ inputs.include_openyoutubeinsafari }}"   == "true" ]] && echo "OpenYouTubeSafariExtension" || true
+            echo "RELEASE_BODY_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      # ── 릴리즈 생성 + IPA 첨부 ────────────────────────────────────────
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.meta.outputs.tag }}
+          name: ${{ steps.meta.outputs.tag }}
+          body: ${{ steps.meta.outputs.body }}
+          files: dist/*.ipa
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
