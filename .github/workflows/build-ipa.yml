@@ -23,73 +23,73 @@ on:
 
       # ── 추가 트윅 선택 ──────────────────────────────────────────────────
       include_ytvideoerroralert:
-        description: "YTVideoErrorAlert – 영상 오류 발생 시 상세 알림"
+        description: "YTVideoErrorAlert"
         required: false
         default: true
         type: boolean
 
       include_donteatmycontent:
-        description: "DontEatMyContent – 노치/Dynamic Island가 영상을 가리지 않도록 보정"
+        description: "DontEatMyContent"
         required: false
         default: true
         type: boolean
 
       include_gonerino:
-        description: "Gonerino – 특정 채널/키워드를 피드에서 숨기기"
+        description: "Gonerino"
         required: false
         default: true
         type: boolean
 
       include_yougetcaption:
-        description: "YouGetCaption – 자막 보기 및 복사"
+        description: "YouGetCaption"
         required: false
         default: true
         type: boolean
 
       include_youchoosequality:
-        description: "YouChooseQuality – 영상 화질 자동 선택"
+        description: "YouChooseQuality"
         required: false
         default: true
         type: boolean
 
       include_youquality:
-        description: "YouQuality – 오버레이에서 빠르게 화질 변경"
+        description: "YouQuality"
         required: false
         default: true
         type: boolean
 
       include_ytabconfig:
-        description: "YTABConfig – YouTube A/B 테스트 플래그 제어"
+        description: "YTABConfig"
         required: false
         default: true
         type: boolean
 
       include_ytvideooverlay:
-        description: "YTVideoOverlay – 비디오 오버레이 버튼 확장 (YouPiP/YouQuality 의존성)"
+        description: "YTVideoOverlay"
         required: false
         default: true
         type: boolean
 
       include_yougroupsettings:
-        description: "YouGroupSettings – 트윅 설정 항목 그룹화"
+        description: "YouGroupSettings"
         required: false
         default: true
         type: boolean
 
       include_youtubedislikesreturn:
-        description: "YouTubeDislikesReturn – 싫어요 수 복원 (tweaks/ryd.deb 사용)"
+        description: "YouTubeDislikesReturn"
         required: false
         default: true
         type: boolean
 
       include_youpip:
-        description: "YouPiP – 네이티브 PiP(화면 속 화면) 활성화"
+        description: "YouPiP"
         required: false
         default: true
         type: boolean
 
       include_openyoutubeinsafari:
-        description: "OpenYouTubeInSafari – Safari Extension (tweaks/OpenYouTubeSafariExtension.appex 사용)"
+        description: "OpenYouTubeInSafari"
         required: false
         default: true
         type: boolean
