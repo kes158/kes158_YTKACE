@@ -194,31 +194,31 @@ jobs:
           fi
 
           [[ "${{ inputs.include_youpip }}"             == "true" ]] && \
-            download_gh_release "PoomSmart/YouPiP"           "YouPiP.deb"
+            download_gh_release "PoomSmart/YouPiP"           "YouPiP.deb" || true
 
           [[ "${{ inputs.include_youchoosequality }}"   == "true" ]] && \
-            download_gh_release "PoomSmart/YouChooseQuality" "YouChooseQuality.deb"
+            download_gh_release "PoomSmart/YouChooseQuality" "YouChooseQuality.deb" || true
 
           [[ "${{ inputs.include_youquality }}"         == "true" ]] && \
-            download_gh_release "PoomSmart/YouQuality"       "YouQuality.deb"
+            download_gh_release "PoomSmart/YouQuality"       "YouQuality.deb" || true
 
           [[ "${{ inputs.include_ytabconfig }}"         == "true" ]] && \
-            download_gh_release "PoomSmart/YTABConfig"       "YTABConfig.deb"
+            download_gh_release "PoomSmart/YTABConfig"       "YTABConfig.deb" || true
 
           [[ "${{ inputs.include_yougroupsettings }}"   == "true" ]] && \
-            download_gh_release "PoomSmart/YouGroupSettings" "YouGroupSettings.deb"
+            download_gh_release "PoomSmart/YouGroupSettings" "YouGroupSettings.deb" || true
 
           [[ "${{ inputs.include_yougetcaption }}"      == "true" ]] && \
-            download_gh_release "PoomSmart/YouGetCaption"    "YouGetCaption.deb"
+            download_gh_release "PoomSmart/YouGetCaption"    "YouGetCaption.deb" || true
 
           [[ "${{ inputs.include_ytvideoerroralert }}"  == "true" ]] && \
-            download_gh_release "PoomSmart/YTVideoErrorAlert" "YTVideoErrorAlert.deb"
+            download_gh_release "PoomSmart/YTVideoErrorAlert" "YTVideoErrorAlert.deb" || true
 
           [[ "${{ inputs.include_donteatmycontent }}"   == "true" ]] && \
-            download_gh_release "therealFoxster/DontEatMyContent" "DontEatMyContent.deb"
+            download_gh_release "therealFoxster/DontEatMyContent" "DontEatMyContent.deb" || true
 
           [[ "${{ inputs.include_gonerino }}"           == "true" ]] && \
-            download_gh_release "castdrian/Gonerino"         "Gonerino.deb"
+            download_gh_release "castdrian/Gonerino"         "Gonerino.deb" || true
 
           echo "=== 다운로드 완료 ==="
           ls -lh extra-debs/ 2>/dev/null || echo "(없음)"
