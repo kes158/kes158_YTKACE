@@ -21,7 +21,7 @@ on:
         default: "com.google.ios.youtube"
         type: string
 
-      # ── 추가 트윅 선택 ──────────────────────────────────────────────
+      # ── 추가 트윅 선택 ──────────────────────────────────────────────────
       include_ytvideoerroralert:
         description: "YTVideoErrorAlert – 영상 오류 발생 시 상세 알림"
         required: false
@@ -77,7 +77,7 @@ on:
         type: boolean
 
       include_youtubedislikesreturn:
-        description: "YouTubeDislikesReturn – 싫어요 수 복원"
+        description: "YouTubeDislikesReturn – 싫어요 수 복원 (tweaks/ryd.deb 사용)"
         required: false
         default: true
         type: boolean
@@ -89,7 +89,7 @@ on:
         type: boolean
 
       include_openyoutubeinsafari:
-        description: "OpenYouTubeInSafari – Safari에서 YouTube 링크 열기"
+        description: "OpenYouTubeInSafari – Safari Extension (tweaks/OpenYouTubeSafariExtension.appex 사용)"
         required: false
         default: true
         type: boolean
@@ -98,11 +98,11 @@ permissions:
   contents: read
 
 jobs:
-  # ── 1단계: YTKACE .deb 빌드 ──────────────────────────────────────────
+  # ── 1단계: YTKACE .deb 빌드 ─────────────────────────────────────────────
   build:
     uses: ./.github/workflows/build-deb.yml
 
-  # ── 2단계: IPA 패키징 ────────────────────────────────────────────────
+  # ── 2단계: IPA 패키징 ───────────────────────────────────────────────────
   package:
     needs: build
     runs-on: macos-latest
@@ -116,11 +116,11 @@ jobs:
 
       - uses: levibostian/action-hide-sensitive-inputs@v1
 
-      # ── 의존 도구 설치 ──────────────────────────────────────────────
+      # ── 도구 설치 ──────────────────────────────────────────────────────
       - name: Setup tools
         run: brew install ldid dpkg
 
-      # ── YouTube IPA 다운로드 ──────────────────────────────────────────
+      # ── YouTube IPA 다운로드 ───────────────────────────────────────────
       - name: Download YouTube IPA
         env:
           IPA_URL: ${{ inputs.ipa_url }}
@@ -136,19 +136,19 @@ jobs:
           fi
           file_type=$(file --mime-type -b YouTube.ipa)
           if [[ "$file_type" != "application/x-ios-app" && "$file_type" != "application/zip" ]]; then
-            echo "Error: Downloaded file is not a valid IPA (mime: $file_type)"
+            echo "Error: not a valid IPA (mime: $file_type)"
             exit 1
           fi
 
-      # ── 추가 트윅 .deb 다운로드 ──────────────────────────────────────
+      # ── GitHub Releases에서 추가 트윅 .deb 다운로드 ────────────────────
       - name: Download extra tweak debs
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           mkdir -p extra-debs
 
-          # GitHub Releases에서 최신 rootless .deb를 받는 헬퍼 함수
-          # 인자: <owner/repo> <출력파일명> [asset_pattern]
+          # GitHub 최신 릴리즈에서 .deb 다운로드 헬퍼
+          # 사용법: download_gh_release <owner/repo> <저장파일명> [파일명_패턴]
           download_gh_release() {
             local repo="$1"
             local outfile="$2"
@@ -160,96 +160,105 @@ jobs:
               | python3 -c "
           import json, sys, re
           data = json.load(sys.stdin)
-          pattern = r'${pattern}'
           assets = data.get('assets', [])
+          pattern = r'${pattern}'
+          # 패턴 일치 우선
           for a in assets:
               if re.search(pattern, a['name']):
-                  print(a['browser_download_url'])
-                  break
+                  print(a['browser_download_url']); break
           else:
               # fallback: 첫 번째 .deb
               for a in assets:
                   if a['name'].endswith('.deb'):
-                      print(a['browser_download_url'])
-                      break
+                      print(a['browser_download_url']); break
           " 2>/dev/null)
             if [[ -n "$url" ]]; then
-              curl --fail --location "$url" --output "extra-debs/${outfile}" \
-                --header "Authorization: Bearer $GH_TOKEN"
-              echo "Downloaded ${outfile} from ${url}"
+              curl --fail --location "$url" \
+                --header "Authorization: Bearer $GH_TOKEN" \
+                --output "extra-debs/${outfile}"
+              echo "[OK] ${outfile} <- ${url}"
             else
-              echo "Warning: No release asset found for ${repo}"
+              echo "[WARN] ${repo} 에서 릴리즈 에셋을 찾지 못했습니다. 건너뜁니다."
             fi
           }
 
-          # ── PoomSmart 트윅 ──
-          if [[ "${{ inputs.include_ytvideooverlay }}" == "true" || \
-                "${{ inputs.include_youpip }}"        == "true" || \
-                "${{ inputs.include_youquality }}"    == "true" ]]; then
+          # YTVideoOverlay: YouPiP / YouQuality 중 하나라도 선택 시 필수
+          if [[ "${{ inputs.include_ytvideooverlay }}" == "true" \
+             || "${{ inputs.include_youpip }}"        == "true" \
+             || "${{ inputs.include_youquality }}"    == "true" ]]; then
             download_gh_release "PoomSmart/YTVideoOverlay" "YTVideoOverlay.deb"
           fi
 
-          if [[ "${{ inputs.include_youpip }}" == "true" ]]; then
-            download_gh_release "PoomSmart/YouPiP" "YouPiP.deb"
-          fi
+          [[ "${{ inputs.include_youpip }}"             == "true" ]] && \
+            download_gh_release "PoomSmart/YouPiP"           "YouPiP.deb"
 
-          if [[ "${{ inputs.include_youchoosequality }}" == "true" ]]; then
+          [[ "${{ inputs.include_youchoosequality }}"   == "true" ]] && \
             download_gh_release "PoomSmart/YouChooseQuality" "YouChooseQuality.deb"
-          fi
 
-          if [[ "${{ inputs.include_youquality }}" == "true" ]]; then
-            download_gh_release "PoomSmart/YouQuality" "YouQuality.deb"
-          fi
+          [[ "${{ inputs.include_youquality }}"         == "true" ]] && \
+            download_gh_release "PoomSmart/YouQuality"       "YouQuality.deb"
 
-          if [[ "${{ inputs.include_ytabconfig }}" == "true" ]]; then
-            download_gh_release "PoomSmart/YTABConfig" "YTABConfig.deb"
-          fi
+          [[ "${{ inputs.include_ytabconfig }}"         == "true" ]] && \
+            download_gh_release "PoomSmart/YTABConfig"       "YTABConfig.deb"
 
-          if [[ "${{ inputs.include_yougroupsettings }}" == "true" ]]; then
+          [[ "${{ inputs.include_yougroupsettings }}"   == "true" ]] && \
             download_gh_release "PoomSmart/YouGroupSettings" "YouGroupSettings.deb"
-          fi
 
-          if [[ "${{ inputs.include_yougetcaption }}" == "true" ]]; then
-            download_gh_release "PoomSmart/YouGetCaption" "YouGetCaption.deb"
-          fi
+          [[ "${{ inputs.include_yougetcaption }}"      == "true" ]] && \
+            download_gh_release "PoomSmart/YouGetCaption"    "YouGetCaption.deb"
 
-          if [[ "${{ inputs.include_ytvideoerroralert }}" == "true" ]]; then
+          [[ "${{ inputs.include_ytvideoerroralert }}"  == "true" ]] && \
             download_gh_release "PoomSmart/YTVideoErrorAlert" "YTVideoErrorAlert.deb"
-          fi
 
-          if [[ "${{ inputs.include_youtubedislikesreturn }}" == "true" ]]; then
-            download_gh_release "PoomSmart/ReturnYouTubeDislike" "ReturnYouTubeDislike.deb" "iphoneos-arm64"
-          fi
-
-          if [[ "${{ inputs.include_openyoutubeinsafari }}" == "true" ]]; then
-            download_gh_release "PoomSmart/OpenYouTubeInSafari" "OpenYouTubeInSafari.deb" "iphoneos-arm64"
-          fi
-
-          # ── 타사 트윅 ──
-          if [[ "${{ inputs.include_donteatmycontent }}" == "true" ]]; then
+          [[ "${{ inputs.include_donteatmycontent }}"   == "true" ]] && \
             download_gh_release "therealFoxster/DontEatMyContent" "DontEatMyContent.deb"
+
+          [[ "${{ inputs.include_gonerino }}"           == "true" ]] && \
+            download_gh_release "castdrian/Gonerino"         "Gonerino.deb"
+
+          echo "=== 다운로드 완료 ==="
+          ls -lh extra-debs/ 2>/dev/null || echo "(없음)"
+
+      # ── 저장소 내 tweaks/ 파일 스테이징 ────────────────────────────────
+      # tweaks/ryd.deb                          → ReturnYouTubeDislike
+      # tweaks/OpenYouTubeSafariExtension.appex → OpenYouTubeInSafari Safari Extension
+      - name: Stage local tweaks from repository
+        run: |
+          # ReturnYouTubeDislike: tweaks/ryd.deb
+          if [[ "${{ inputs.include_youtubedislikesreturn }}" == "true" ]]; then
+            if [[ -f "tweaks/ryd.deb" ]]; then
+              cp "tweaks/ryd.deb" "extra-debs/ReturnYouTubeDislike.deb"
+              echo "[OK] tweaks/ryd.deb → extra-debs/ReturnYouTubeDislike.deb"
+            else
+              echo "[WARN] tweaks/ryd.deb 파일이 없습니다. ReturnYouTubeDislike를 건너뜁니다."
+            fi
           fi
 
-          if [[ "${{ inputs.include_gonerino }}" == "true" ]]; then
-            download_gh_release "castdrian/Gonerino" "Gonerino.deb"
+          # OpenYouTubeInSafari: tweaks/OpenYouTubeSafariExtension.appex
+          # .appex는 extra-debs가 아닌 별도 경로에 보관 (주입 방식이 다름)
+          if [[ "${{ inputs.include_openyoutubeinsafari }}" == "true" ]]; then
+            if [[ -e "tweaks/OpenYouTubeSafariExtension.appex" ]]; then
+              echo "[OK] tweaks/OpenYouTubeSafariExtension.appex 확인됨"
+            else
+              echo "[WARN] tweaks/OpenYouTubeSafariExtension.appex 파일이 없습니다. OpenYouTubeInSafari를 건너뜁니다."
+            fi
           fi
 
-          echo "=== Downloaded extra debs ==="
-          ls -lh extra-debs/ || echo "(none)"
-
-      # ── YTKACE 주입 + 추가 트윅 병합 ────────────────────────────────
+      # ── YTKACE 1차 주입 + 추가 트윅 2차 주입 ──────────────────────────
       - name: Inject YTKACE and extra tweaks
         id: inject
         env:
           APP_NAME:  ${{ inputs.app_name }}
           BUNDLE_ID: ${{ inputs.bundle_id }}
         run: |
+          set -euo pipefail
+
           # ── YTKACE deb 풀기 ──
           mkdir deb-root
           dpkg-deb -x packages/*.deb deb-root
           export LDID="$(brew --prefix)/bin/ldid"
 
-          # ── 버전 정보 ──
+          # ── 버전 정보 추출 ──
           tweak_version="$(awk '/^Version:/ {print $2}' control)"
           youtube_version="$(python3 - <<'PY'
           import plistlib, zipfile
@@ -261,207 +270,200 @@ jobs:
           )"
           output="YTKACE_${tweak_version}_YouTube_${youtube_version}.ipa"
 
-          # ── 1차: YTKACE sideload-repack (YTKACE dylib + bundle 주입) ──
+          # ── 1차: YTKACE sideload-repack ──
           bash Scripts/sideload-repack.sh \
             YouTube.ipa \
             deb-root/var/jb/Library/MobileSubstrate/DynamicLibraries/YTKACE.dylib \
             intermediate.ipa
 
-          # ── 2차: 추가 트윅 dylib들 수동 주입 ──
-          # extra-debs/*.deb → dylib 추출 → Frameworks/ 복사 → load command 추가
-          if ls extra-debs/*.deb 1>/dev/null 2>&1; then
-            mkdir -p work-inject
-            unzip -q intermediate.ipa -d work-inject
-            APP_PATH="$(find work-inject/Payload -maxdepth 1 -type d -name '*.app' | head -1)"
-            EXECUTABLE="${APP_PATH}/$(python3 - "${APP_PATH}/Info.plist" <<'PY'
+          # ── 2차: 추가 트윅 주입 (dylib + appex) ──
+          mkdir -p work-inject
+          unzip -q intermediate.ipa -d work-inject
+          APP_PATH="$(find work-inject/Payload -maxdepth 1 -type d -name '*.app' | head -1)"
+          EXECUTABLE="$APP_PATH/$(python3 - "$APP_PATH/Info.plist" <<'PY'
           import plistlib, sys
           with open(sys.argv[1], 'rb') as f:
               print(plistlib.load(f)['CFBundleExecutable'])
           PY
           )"
+          mkdir -p "$APP_PATH/Frameworks"
 
-            mkdir -p "${APP_PATH}/Frameworks"
+          # ── Python: Mach-O load command 삽입 함수 ──
+          cat > /tmp/inject_dylib.py << 'PYEOF'
+          import sys, struct
+
+          LC_LOAD_DYLIB = 0xC
+          FAT_MAGIC_BE  = 0xCAFEBABE
+          MH_MAGIC_64   = 0xFEEDFACF
+          CPU_ARM64     = 0x0100000C
+
+          def read_u32_le(data, off): return struct.unpack_from('<I', data, off)[0]
+          def read_u32_be(data, off): return struct.unpack_from('>I', data, off)[0]
+          def write_u32_le(data, off, val): struct.pack_into('<I', data, off, val)
+
+          def inject_slice(data, base, rpath):
+              """arm64 LE slice에 LC_LOAD_DYLIB 추가 (중복 방지)"""
+              ncmds     = read_u32_le(data, base + 16)
+              cmdsz     = read_u32_le(data, base + 20)
+              off       = base + 32
+              for _ in range(ncmds):
+                  cmd, size = struct.unpack_from('<II', data, off)
+                  if cmd == LC_LOAD_DYLIB:
+                      name_off = read_u32_le(data, off + 8)
+                      existing = data[off + name_off: off + size].split(b'\x00')[0].decode('utf-8', 'replace')
+                      if existing == rpath:
+                          print(f"  이미 존재: {rpath}")
+                          return
+                  off += size
+
+              # LC_LOAD_DYLIB 생성 (8바이트 정렬)
+              name_off  = 24
+              name_b    = rpath.encode() + b'\x00'
+              padded    = (len(name_b) + 7) & ~7
+              name_b    = name_b.ljust(padded, b'\x00')
+              cmd_size  = name_off + padded
+              lc        = struct.pack('<IIIII', LC_LOAD_DYLIB, cmd_size, name_off, 2, 0) + name_b
+
+              write_u32_le(data, base + 16, ncmds + 1)
+              write_u32_le(data, base + 20, cmdsz + cmd_size)
+
+              insert_at = base + 32 + cmdsz
+              data[insert_at:insert_at] = lc
+              print(f"  삽입 완료: {rpath}")
+
+          def process(binary_path, dylib_name):
+              rpath = f"@rpath/{dylib_name}"
+              with open(binary_path, 'rb') as f:
+                  data = bytearray(f.read())
+
+              magic = read_u32_be(data, 0)
+              if magic == FAT_MAGIC_BE:
+                  narch = read_u32_be(data, 4)
+                  for i in range(narch):
+                      entry = 8 + i * 20
+                      cputype = read_u32_be(data, entry)
+                      offset  = read_u32_be(data, entry + 8)
+                      if cputype == CPU_ARM64:
+                          inject_slice(data, offset, rpath)
+                          break
+              else:
+                  inject_slice(data, 0, rpath)
+
+              with open(binary_path, 'wb') as f:
+                  f.write(data)
+
+          process(sys.argv[1], sys.argv[2])
+          PYEOF
+
+          # ── .deb 파일 처리: dylib + bundle 추출 및 주입 ──
+          if ls extra-debs/*.deb 1>/dev/null 2>&1; then
             mkdir -p extra-dylibs
-
             for deb in extra-debs/*.deb; do
               deb_name="$(basename "$deb" .deb)"
               extract_dir="extra-dylibs/${deb_name}"
               mkdir -p "$extract_dir"
               dpkg-deb -x "$deb" "$extract_dir"
 
-              # dylib 탐색 (rootless 경로: var/jb/... 또는 Library/...)
+              echo "--- ${deb_name} 처리 중 ---"
+
+              # dylib 주입
               while IFS= read -r -d '' dylib; do
                 dylib_name="$(basename "$dylib")"
-                # plist 파일 제외, .dylib만 처리
-                if [[ "$dylib_name" == *.dylib ]]; then
-                  echo "Injecting ${dylib_name} from ${deb_name}"
-                  cp "$dylib" "${APP_PATH}/Frameworks/${dylib_name}"
+                echo "  dylib 주입: $dylib_name"
+                cp "$dylib" "$APP_PATH/Frameworks/$dylib_name"
+                python3 /tmp/inject_dylib.py "$EXECUTABLE" "$dylib_name"
+              done < <(find "$extract_dir" \
+                -path "*/DynamicLibraries/*.dylib" -o \
+                -path "*/MobileSubstrate/DynamicLibraries/*.dylib" | \
+                grep -v '\.plist$' | tr '\n' '\0' | xargs -0 printf '%s\0')
 
-                  # @rpath load command 추가
-                  python3 - "${EXECUTABLE}" "${dylib_name}" <<'PY'
-          import sys, struct
-
-          MH_MAGIC_64   = 0xFEEDFACF
-          LC_LOAD_DYLIB = 0xC
-          LC_RPATH      = 0x8000001C
-
-          def add_load_dylib(binary_path, dylib_name):
-              rpath_entry = f"@rpath/{dylib_name}"
-              with open(binary_path, 'rb') as f:
-                  data = bytearray(f.read())
-
-              magic = struct.unpack_from('<I', data, 0)[0]
-              if magic != MH_MAGIC_64:
-                  # fat binary – 각 slice 처리 (간단 구현: 첫 arm64 slice)
-                  fat_magic = struct.unpack_from('>I', data, 0)[0]
-                  if fat_magic == 0xCAFEBABE:
-                      narch = struct.unpack_from('>I', data, 4)[0]
-                      for i in range(narch):
-                          off = 8 + i * 20
-                          cputype = struct.unpack_from('>I', data, off)[0]
-                          offset  = struct.unpack_from('>I', data, off+8)[0]
-                          if cputype == 0x0100000C:  # CPU_TYPE_ARM64
-                              add_load_dylib_slice(data, offset, rpath_entry)
-                              break
-              else:
-                  add_load_dylib_slice(data, 0, rpath_entry)
-
-              with open(binary_path, 'wb') as f:
-                  f.write(data)
-
-          def add_load_dylib_slice(data, base, rpath_entry):
-              ncmds   = struct.unpack_from('<I', data, base + 16)[0]
-              cmdsize_total = struct.unpack_from('<I', data, base + 20)[0]
-              offset = base + 32
-              for _ in range(ncmds):
-                  cmd, size = struct.unpack_from('<II', data, offset)
-                  if cmd == LC_LOAD_DYLIB:
-                      name_off = struct.unpack_from('<I', data, offset + 8)[0]
-                      existing = data[offset + name_off: offset + size].split(b'\x00')[0].decode()
-                      if existing == rpath_entry:
-                          return  # 이미 존재
-                  offset += size
-
-              # load command 생성
-              name_offset = 24
-              entry_bytes = rpath_entry.encode() + b'\x00'
-              padded = ((len(entry_bytes) + 7) & ~7)
-              entry_bytes = entry_bytes.ljust(padded, b'\x00')
-              cmd_size = name_offset + padded
-              lc = struct.pack('<IIIII', LC_LOAD_DYLIB, cmd_size, name_offset, 0, 0) + entry_bytes
-
-              # header의 ncmds, sizeofcmds 업데이트
-              ncmds_new = struct.unpack_from('<I', data, base + 16)[0] + 1
-              cmdsz_new = struct.unpack_from('<I', data, base + 20)[0] + cmd_size
-              struct.pack_into('<I', data, base + 16, ncmds_new)
-              struct.pack_into('<I', data, base + 20, cmdsz_new)
-
-              # load command 삽입 (기존 commands 끝에 append)
-              insert_at = base + 32 + cmdsize_total
-              data[insert_at:insert_at] = lc
-
-          add_load_dylib(sys.argv[1], sys.argv[2])
-          PY
+              # dylib (경로 무관, 위 패턴 못 찾은 경우 fallback)
+              while IFS= read -r -d '' dylib; do
+                dylib_name="$(basename "$dylib")"
+                dest="$APP_PATH/Frameworks/$dylib_name"
+                if [[ ! -f "$dest" ]]; then
+                  echo "  dylib fallback 주입: $dylib_name"
+                  cp "$dylib" "$dest"
+                  python3 /tmp/inject_dylib.py "$EXECUTABLE" "$dylib_name"
                 fi
               done < <(find "$extract_dir" -name '*.dylib' -print0)
-            done
 
-            # bundle 관련 파일도 복사 (있는 경우)
-            for deb in extra-debs/*.deb; do
-              deb_name="$(basename "$deb" .deb)"
-              extract_dir="extra-dylibs/${deb_name}"
+              # .bundle 복사
               while IFS= read -r -d '' bundle; do
                 bundle_name="$(basename "$bundle")"
-                echo "Copying bundle ${bundle_name} from ${deb_name}"
-                cp -R "$bundle" "${APP_PATH}/${bundle_name}"
+                echo "  bundle 복사: $bundle_name"
+                cp -R "$bundle" "$APP_PATH/$bundle_name"
               done < <(find "$extract_dir" -name '*.bundle' -print0)
+
             done
-
-            # App Name / Bundle ID 변경
-            if [[ -n "$APP_NAME" && "$APP_NAME" != "YouTube" ]]; then
-              python3 - "${APP_PATH}/Info.plist" "$APP_NAME" <<'PY'
-          import plistlib, sys
-          path, name = sys.argv[1], sys.argv[2]
-          with open(path, 'rb') as f:
-              pl = plistlib.load(f)
-          pl['CFBundleDisplayName'] = name
-          pl['CFBundleName'] = name
-          with open(path, 'wb') as f:
-              plistlib.dump(pl, f)
-          PY
-            fi
-
-            if [[ -n "$BUNDLE_ID" && "$BUNDLE_ID" != "com.google.ios.youtube" ]]; then
-              python3 - "${APP_PATH}/Info.plist" "$BUNDLE_ID" <<'PY'
-          import plistlib, sys
-          path, bid = sys.argv[1], sys.argv[2]
-          with open(path, 'rb') as f:
-              pl = plistlib.load(f)
-          pl['CFBundleIdentifier'] = bid
-          with open(path, 'wb') as f:
-              plistlib.dump(pl, f)
-          PY
-            fi
-
-            # ldid 재서명
-            "$LDID" -S "${EXECUTABLE}"
-
-            # 최종 IPA 재패키징
-            rm -f intermediate.ipa
-            (cd work-inject && zip -qry "../${output}" Payload)
-            rm -rf work-inject
           else
-            # 추가 트윅 없음 → intermediate.ipa 그대로 사용
-            mv intermediate.ipa "$output"
-
-            # App Name / Bundle ID 변경이 필요한 경우
-            if [[ ( -n "$APP_NAME" && "$APP_NAME" != "YouTube" ) || \
-                  ( -n "$BUNDLE_ID" && "$BUNDLE_ID" != "com.google.ios.youtube" ) ]]; then
-              mkdir work-rename
-              unzip -q "$output" -d work-rename
-              APP_PATH_R="$(find work-rename/Payload -maxdepth 1 -type d -name '*.app' | head -1)"
-              EXEC_R="${APP_PATH_R}/$(python3 -c "
-          import plistlib
-          with open('${APP_PATH_R}/Info.plist', 'rb') as f:
-              print(plistlib.load(f)['CFBundleExecutable'])
-          ")"
-              if [[ -n "$APP_NAME" && "$APP_NAME" != "YouTube" ]]; then
-                python3 - "${APP_PATH_R}/Info.plist" "$APP_NAME" <<'PY'
-          import plistlib, sys
-          path, name = sys.argv[1], sys.argv[2]
-          with open(path, 'rb') as f:
-              pl = plistlib.load(f)
-          pl['CFBundleDisplayName'] = name
-          pl['CFBundleName'] = name
-          with open(path, 'wb') as f:
-              plistlib.dump(pl, f)
-          PY
-              fi
-              if [[ -n "$BUNDLE_ID" && "$BUNDLE_ID" != "com.google.ios.youtube" ]]; then
-                python3 - "${APP_PATH_R}/Info.plist" "$BUNDLE_ID" <<'PY'
-          import plistlib, sys
-          path, bid = sys.argv[1], sys.argv[2]
-          with open(path, 'rb') as f:
-              pl = plistlib.load(f)
-          pl['CFBundleIdentifier'] = bid
-          with open(path, 'wb') as f:
-              plistlib.dump(pl, f)
-          PY
-              fi
-              "$LDID" -S "$EXEC_R"
-              rm -f "$output"
-              (cd work-rename && zip -qry "../${output}" Payload)
-              rm -rf work-rename
-            fi
+            echo "추가 .deb 없음, 건너뜁니다."
           fi
 
+          # ── .appex 처리: PlugIns/ 에 복사 ────────────────────────────
+          # OpenYouTubeSafariExtension.appex는 Safari Extension이므로
+          # YouTube.app/PlugIns/ 아래에 위치해야 함
+          if [[ "${{ inputs.include_openyoutubeinsafari }}" == "true" \
+             && -e "tweaks/OpenYouTubeSafariExtension.appex" ]]; then
+            echo "--- OpenYouTubeSafariExtension.appex 주입 ---"
+            mkdir -p "$APP_PATH/PlugIns"
+            cp -R "tweaks/OpenYouTubeSafariExtension.appex" \
+                  "$APP_PATH/PlugIns/OpenYouTubeSafariExtension.appex"
+            # appex 내 실행파일 서명
+            APPEX_EXEC="$APP_PATH/PlugIns/OpenYouTubeSafariExtension.appex/OpenYouTubeSafariExtension"
+            if [[ -f "$APPEX_EXEC" ]]; then
+              "$LDID" -S "$APPEX_EXEC"
+              echo "  appex 실행파일 서명 완료"
+            fi
+            echo "  PlugIns/ 복사 완료"
+          fi
+
+          # ── App Name 변경 ──────────────────────────────────────────────
+          if [[ -n "$APP_NAME" && "$APP_NAME" != "YouTube" ]]; then
+            python3 - "$APP_PATH/Info.plist" "$APP_NAME" <<'PY'
+          import plistlib, sys
+          path, name = sys.argv[1], sys.argv[2]
+          with open(path, 'rb') as f:
+              pl = plistlib.load(f)
+          pl['CFBundleDisplayName'] = name
+          pl['CFBundleName'] = name
+          with open(path, 'wb') as f:
+              plistlib.dump(pl, f)
+          PY
+            echo "App Name 변경: $APP_NAME"
+          fi
+
+          # ── Bundle ID 변경 ─────────────────────────────────────────────
+          if [[ -n "$BUNDLE_ID" && "$BUNDLE_ID" != "com.google.ios.youtube" ]]; then
+            python3 - "$APP_PATH/Info.plist" "$BUNDLE_ID" <<'PY'
+          import plistlib, sys
+          path, bid = sys.argv[1], sys.argv[2]
+          with open(path, 'rb') as f:
+              pl = plistlib.load(f)
+          pl['CFBundleIdentifier'] = bid
+          with open(path, 'wb') as f:
+              plistlib.dump(pl, f)
+          PY
+            echo "Bundle ID 변경: $BUNDLE_ID"
+          fi
+
+          # ── 메인 실행파일 재서명 ───────────────────────────────────────
+          "$LDID" -S "$EXECUTABLE"
+
+          # ── 최종 IPA 패키징 ────────────────────────────────────────────
+          rm -f intermediate.ipa
+          (cd work-inject && zip -qry "../${output}" Payload)
+          rm -rf work-inject /tmp/inject_dylib.py
+
+          # ── 검증 ───────────────────────────────────────────────────────
           bash Tools/verify-artifacts.sh \
             deb-root/var/jb/Library/MobileSubstrate/DynamicLibraries/YTKACE.dylib \
             "$output"
 
           echo "ipa=$output" >> "$GITHUB_OUTPUT"
+          echo "=== 빌드 완료: $output ==="
 
-      # ── 아티팩트 업로드 ───────────────────────────────────────────────
+      # ── 아티팩트 업로드 ────────────────────────────────────────────────
       - uses: actions/upload-artifact@v4
         with:
           name: YTKACE-IPA
